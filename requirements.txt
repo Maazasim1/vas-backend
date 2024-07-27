@@ -1,0 +1,7 @@
+flask
+opencv-python
+torch
+facenet_pytorch
+ultralytics
+flask_cors
+pymongo
