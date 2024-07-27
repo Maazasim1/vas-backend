@@ -1,7 +1,7 @@
 .idea/
 .vscode/
-.venv*/
-venv*/
+.VAS*/
+VAS*/
 __pycache__/
 dist/
 .coverage*

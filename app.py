@@ -11,14 +11,14 @@ from ultralytics import YOLO
 from flask_cors import CORS
 import base64
 import io
-from mongo_client import insert_metadata
 from pymongo import MongoClient
+from mongo_client import insert_metadata
 
 app = Flask(__name__)
 CORS(app, origins="http://localhost:3000")
 
 # Load YOLO model for face detection
-model = YOLO("./Models/faceDetection/face_detection.pt")
+model = YOLO("C:/Users/rohaa/Desktop/VAS/Models/faceDetection/face_detection.pt")
 
 # Initialize face recognition model
 mtcnn = MTCNN()
@@ -26,7 +26,7 @@ resnet = InceptionResnetV1(pretrained='casia-webface').eval()
 
 # Paths for image and video files
 received_images_path = 'ReceivedImages/'
-video_path = './test1.mp4'
+video_path = 'C:/Users/rohaa/Desktop/VAS/test1.mp4'
 
 # Ensure the ReceivedImages directory exists
 if not os.path.exists(received_images_path):
@@ -47,7 +47,6 @@ def extract_embeddings(img):
     else:
         return None
 
-
 # Function to compare embeddings
 def compare_embeddings(embedding1, embedding2, threshold=1.0):
     distance = torch.norm(embedding1 - embedding2).item()
@@ -58,7 +57,7 @@ def generate_unique_id():
     return str(uuid.uuid4())
 
 class VideoProcessor:
-    def __init__(self, video_path):
+    def __init__(self, video_path, mongo_client):
         self.video_path = video_path
         self.cap = cv2.VideoCapture(video_path)
         self.video_id = generate_unique_id()  # Unique ID for the video
@@ -68,6 +67,7 @@ class VideoProcessor:
         width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.out = cv2.VideoWriter(self.output_path, fourcc, fps, (width, height))
+        self.mongo_client = mongo_client
 
     def process_video(self, reference_embedding, email_id):
         yield 'data: Streaming API initialized\n\n'
@@ -115,7 +115,7 @@ class VideoProcessor:
                         }
                         
                         # Insert metadata into MongoDB
-                        inserted_document = insert_metadata(metadata, email_id)
+                        inserted_document = insert_metadata(metadata, email_id, self.mongo_client)
                         if inserted_document and inserted_document.modified_count > 0:
                             metadata['_id'] = str(inserted_document.upserted_id) if inserted_document.upserted_id else "existing_document"
                         else:
@@ -173,13 +173,13 @@ def stream():
         return "No face detected in the reference image", 400
 
     # Path for video files
-    video_directory = './videos/'  # Update this path to your video directory
+    video_directory = 'C:/Users/rohaa/Desktop/VAS/videos/'  # Update this path to your video directory
 
     def generate():
         for video_filename in os.listdir(video_directory):
             if video_filename.endswith(".mp4"):  # Assuming videos are in MP4 format
                 video_path = os.path.join(video_directory, video_filename)
-                video_processor = VideoProcessor(video_path)
+                video_processor = VideoProcessor(video_path, mongo_client)
 
                 # Yield processed frames from the video
                 yield from video_processor.process_video(reference_embedding=reference_embedding, email_id=email_id)
@@ -187,13 +187,9 @@ def stream():
     # Return a streaming response with the generated data
     return Response(generate(), mimetype='text/event-stream')
 
-
 @app.route('/fetch_all_metadata', methods=['GET'])
 def fetch_all_metadata():
-    mongo_uri = os.getenv("MONGO_URI")
-    client = MongoClient(mongo_uri)
-    db = client.vas
-    metadata_collection = db['vas-logger']
+    metadata_collection = mongo_client.vas['vas-logger']
     
     try:
         documents = metadata_collection.find()
@@ -205,21 +201,13 @@ def fetch_all_metadata():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
-
-@app.route('/',methods=['GET'])
-def defaultRoute():
-    return "this is the vas backend"
 @app.route('/get_metadata', methods=['GET'])
 def get_metadata():
     email = request.args.get('email')
     if not email:
         return jsonify({"error": "Email parameter is missing"}), 400
 
-    # Connect to MongoDB
-    mongo_uri = os.getenv("MONGO_URI", "mongodb+srv://mazzasimq1:vFjQU2EwpPEbRwGf@cluster0.aigbuff.mongodb.net/vas")
-    client = MongoClient(mongo_uri)
-    db = client.vas
-    metadata_collection = db['users']
+    metadata_collection = mongo_client.vas['users']
 
     res_object = {}
 
@@ -258,8 +246,8 @@ def get_metadata():
         # Handle and log any exceptions that occur
         return jsonify({"error": str(e)}), 500
 
-
-
-    
 if __name__ == '__main__':
+    # Initialize MongoDB client once at startup
+    mongo_uri = os.getenv("MONGO_URI", "mongodb+srv://mazzasimq1:vFjQU2EwpPEbRwGf@cluster0.aigbuff.mongodb.net/vas")
+    mongo_client = MongoClient(mongo_uri)
     app.run(host="0.0.0.0", port=5000, debug=True, threaded=True)
