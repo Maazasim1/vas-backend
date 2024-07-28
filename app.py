@@ -9,7 +9,7 @@ from services.embeddings import extract_embeddings, compare_embeddings
 from services.video_processor import VideoProcessor
 
 app = Flask(__name__)
-CORS(app, origins="http://192.168.1.9:3000")
+CORS(app, origins="http://localhost:3000")
 
 # Initialize MongoDB client once at startup
 mongo_client = MongoClient(Config.MONGO_URI)

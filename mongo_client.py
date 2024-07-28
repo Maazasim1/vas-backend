@@ -7,7 +7,7 @@ def insert_metadata(metadata, email_id, mongo_client):
     metadata_collection = db['users']
     try:
         print("Metadata to be inserted: ", metadata)
-        result = metadata_collection.update_one({'email': email_id}, {"$push": {"metadata_array": metadata}}, upsert=True)
+        result = metadata_collection.update_one({'email': email_id}, {"$push": {"metadata_array": metadata}})
         print("Insertion result: ", result)
         return result
     except Exception as e:

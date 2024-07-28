@@ -40,7 +40,8 @@ def stream():
     if reference_embedding is None:
         return "No face detected in the reference image", 400
 
-    video_directory = 'C:/Users/rohaa/Desktop/VAS/videos/'
+    video_directory = './videos'
+    print(video_directory)
 
     def generate():
         for video_filename in os.listdir(video_directory):
