@@ -3,7 +3,7 @@ from flask_cors import CORS
 from pymongo import MongoClient
 from config import Config
 from routes import default, upload, stream, metadata
-# from utils import generate_unique_id, extract_embeddings, compare_embeddings, VideoProcessor
+from firebase.firebase_config import initialize_firebase
 from services.utils import generate_unique_id
 from services.embeddings import extract_embeddings, compare_embeddings
 from services.video_processor import VideoProcessor
@@ -18,6 +18,10 @@ app.config['generate_unique_id'] = generate_unique_id
 app.config['extract_embeddings'] = extract_embeddings
 app.config['compare_embeddings'] = compare_embeddings
 app.config['VideoProcessor'] = VideoProcessor
+
+#Initialize Firebase
+initialize_firebase()
+
 # Register blueprints
 app.register_blueprint(default.bp)
 app.register_blueprint(upload.bp)
