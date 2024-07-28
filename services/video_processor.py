@@ -1,3 +1,4 @@
+# video_processor.py
 import cv2
 import os
 import base64
@@ -13,18 +14,13 @@ from mongo_client import insert_metadata
 from config import Config
 from firebase_admin import storage
 from datetime import datetime
+from flask import current_app
 
 class VideoProcessor:
     def __init__(self, video_path, mongo_client):
         self.video_path = video_path
         self.cap = cv2.VideoCapture(video_path)
         self.video_id = str(uuid.uuid4())  # Unique ID for the video
-        # self.output_path = f'processed_{self.video_id}.mp4'
-        # fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        # fps = self.cap.get(cv2.CAP_PROP_FPS)
-        # width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        # height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        # self.out = cv2.VideoWriter(self.output_path, fourcc, fps, (width, height))
         self.mongo_client = mongo_client
 
         # Load YOLO model for face detection
@@ -32,12 +28,9 @@ class VideoProcessor:
         self.mtcnn = MTCNN()
         self.resnet = InceptionResnetV1(pretrained='casia-webface').eval()
 
-    def process_video(self, reference_embedding, email_id, image_id, image_path):
+    def process_video(self, reference_embedding, email_id, image_id, image_path, insertion_bool):
         yield 'data: Streaming API initialized\n\n'
-        metadata_collection = self.mongo_client.vas['users']
-        if metadata_collection.find_one({'metadata_array.up_image_id': image_id}):
-            yield f"data: Cannot insert duplicate image_id {image_id}\n\n"
-            return
+
         frame_count = 0
         # Loading received image
         try:
@@ -51,6 +44,7 @@ class VideoProcessor:
 
         image_path = f'{image_id}.jpg'
         bucket = storage.bucket()
+
         try:
             image_ref_b64_bytes = base64.b64decode(image_ref_b64)
             blob_up = bucket.blob(f"stream/uploaded/{image_id}.jpg")
@@ -119,18 +113,15 @@ class VideoProcessor:
                             'image': res_image_url,  # Add the base64 string to metadata
                         }
                         metadata['detected'].append(detected)
-                        yield f'data: {json.dumps(metadata)}\n\n'  # Yield metadata for the face
+                        yield f'data: {json.dumps(detected)}\n\n'  # Yield metadata for the face
 
         inserted_document = insert_metadata(metadata, email_id, self.mongo_client)
         if inserted_document and inserted_document.modified_count > 0:
             metadata['_id'] = str(inserted_document.upserted_id) if inserted_document.upserted_id else "existing_document"
         else:
             yield "data: Failed to insert metadata\n\n"
-
-        # Write the processed frame to the video
-        # self.out.write(frame)
-        frame_count += 1
+            insertion_bool = True
+            return insertion_bool
 
         self.cap.release()
-        # self.out.release()
         yield 'data: Video processing completed\n\n'
