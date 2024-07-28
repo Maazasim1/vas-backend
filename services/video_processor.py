@@ -12,6 +12,7 @@ from services.embeddings import extract_embeddings, compare_embeddings
 from mongo_client import insert_metadata
 from config import Config
 from firebase_admin import storage
+from datetime import datetime
 
 class VideoProcessor:
     def __init__(self, video_path, mongo_client):
@@ -33,6 +34,10 @@ class VideoProcessor:
 
     def process_video(self, reference_embedding, email_id, image_id, image_path):
         yield 'data: Streaming API initialized\n\n'
+        metadata_collection = self.mongo_client.vas['users']
+        if metadata_collection.find_one({'metadata_array.up_image_id': image_id}):
+            yield f"data: Cannot insert duplicate image_id {image_id}\n\n"
+            return
         frame_count = 0
         # Loading received image
         try:
@@ -74,6 +79,7 @@ class VideoProcessor:
             for result in results:
                 boxes = result.boxes
                 for box in boxes:
+                    cur_date_time = datetime.now()
                     x1, y1, x2, y2 = box.xyxy[0].tolist()
                     face = frame[int(y1):int(y2), int(x1):int(x2)]
 
@@ -108,7 +114,7 @@ class VideoProcessor:
                         detected = {
                             'detected': match,
                             'face_id': unique_face_id,
-                            'timestamp': timestamp,
+                            'timestamp': str(cur_date_time),
                             'video_id': self.video_id,
                             'image': res_image_url,  # Add the base64 string to metadata
                         }
