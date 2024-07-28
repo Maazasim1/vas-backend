@@ -9,45 +9,57 @@ bp = Blueprint('stream', __name__)
 
 @bp.route('/stream', methods=['GET'])
 def stream():
-    mongo_client = current_app.config['mongo_client']
-    image_id = request.args.get('image_id')
-    email_id = request.args.get('email')
-    if not image_id:
-        return "No image ID provided", 400
+    with current_app.app_context():
+        mongo_client = current_app.config['mongo_client']
+        image_id = request.args.get('image_id')
+        email_id = request.args.get('email')
+        if not image_id:
+            return "No image ID provided", 400
 
-    image_path = os.path.join('ReceivedImages', f'{image_id}.jpg')
-    if not os.path.exists(image_path):
-        return "Image not found", 404
-    db = mongo_client.vas
-    collection = db['users']
-    result = collection.find_one({'email':email_id})
-    if not result:
-        return f"No user with this email found", 404
-    try:
-        # Load the reference image
-        image = Image.open(image_path)
-        image = np.array(image)
-    except Exception as e:
-        return f"Error processing image: {e}", 500
+        image_path = os.path.join('ReceivedImages', f'{image_id}.jpg')
+        if not os.path.exists(image_path):
+            return "Image not found", 404
+        insertion_bool=False
+        db = mongo_client.vas
+        collection = db['users']
+        result = collection.find_one({'email': email_id})
+        if not result:
+            return f"No user with this email found", 404
 
-    # Access the utility functions and classes from the app context
-    generate_unique_id = current_app.config['generate_unique_id']
-    extract_embeddings = current_app.config['extract_embeddings']
-    compare_embeddings = current_app.config['compare_embeddings']
-    VideoProcessor = current_app.config['VideoProcessor']
+        try:
+            # Load the reference image
+            image = Image.open(image_path)
+            image = np.array(image)
+        except Exception as e:
+            return f"Error processing image: {e}", 500
 
-    reference_embedding = extract_embeddings(image)
-    if reference_embedding is None:
-        return "No face detected in the reference image", 400
+        # Access the utility functions and classes from the app context
+        generate_unique_id = current_app.config['generate_unique_id']
+        extract_embeddings = current_app.config['extract_embeddings']
+        compare_embeddings = current_app.config['compare_embeddings']
+        VideoProcessor = current_app.config['VideoProcessor']
 
-    video_directory = 'C:/Users/rohaa/Desktop/VAS/videos/'
+        reference_embedding = extract_embeddings(image)
+        if reference_embedding is None:
+            return "No face detected in the reference image", 400
 
-    def generate():
-        for video_filename in os.listdir(video_directory):
-            if video_filename.endswith(".mp4"):
-                video_path = os.path.join(video_directory, video_filename)
-                video_processor = VideoProcessor(video_path, mongo_client)
+        video_directory = 'C:/Users/rohaa/Desktop/VAS/videos/'
 
-                yield from video_processor.process_video(reference_embedding=reference_embedding, email_id=email_id, image_id=image_id, image_path=image_path)
+        def generate():
+            for video_filename in os.listdir(video_directory):
+                if video_filename.endswith(".mp4"):
+                    video_path = os.path.join(video_directory, video_filename)
+                    video_processor = VideoProcessor(video_path, mongo_client)
 
-    return Response(generate(), mimetype='text/event-stream')
+                    res = yield from video_processor.process_video(
+                        reference_embedding=reference_embedding,
+                        email_id=email_id,
+                        image_id=image_id,
+                        image_path=image_path,
+                        insertion_bool=insertion_bool
+                    )
+                    if res:
+                        yield f"data: Duplicate key detected\n\n"
+                        break
+
+        return Response(generate(), mimetype='text/event-stream')
