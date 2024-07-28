@@ -6,3 +6,4 @@ ultralytics
 flask_cors
 pymongo
 firebase_admin
+gunicorn
