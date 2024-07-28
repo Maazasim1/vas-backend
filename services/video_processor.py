@@ -12,6 +12,7 @@ from services.embeddings import extract_embeddings, compare_embeddings
 from mongo_client import insert_metadata
 from config import Config
 from firebase_admin import storage
+from datetime import datetime
 
 class VideoProcessor:
     def __init__(self, video_path, mongo_client):
@@ -74,6 +75,7 @@ class VideoProcessor:
             for result in results:
                 boxes = result.boxes
                 for box in boxes:
+                    cur_date_time = datetime.now()
                     x1, y1, x2, y2 = box.xyxy[0].tolist()
                     face = frame[int(y1):int(y2), int(x1):int(x2)]
 
@@ -108,7 +110,7 @@ class VideoProcessor:
                         detected = {
                             'detected': match,
                             'face_id': unique_face_id,
-                            'timestamp': timestamp,
+                            'timestamp': cur_date_time,
                             'video_id': self.video_id,
                             'image': res_image_url,  # Add the base64 string to metadata
                         }
