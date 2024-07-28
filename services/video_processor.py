@@ -34,6 +34,10 @@ class VideoProcessor:
 
     def process_video(self, reference_embedding, email_id, image_id, image_path):
         yield 'data: Streaming API initialized\n\n'
+        metadata_collection = self.mongo_client.vas['users']
+        if metadata_collection.find_one({'metadata_array.up_image_id': image_id}):
+            yield f"data: Cannot insert duplicate image_id {image_id}\n\n"
+            return
         frame_count = 0
         # Loading received image
         try:
@@ -110,7 +114,7 @@ class VideoProcessor:
                         detected = {
                             'detected': match,
                             'face_id': unique_face_id,
-                            'timestamp': cur_date_time,
+                            'timestamp': str(cur_date_time),
                             'video_id': self.video_id,
                             'image': res_image_url,  # Add the base64 string to metadata
                         }
