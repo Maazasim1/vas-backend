@@ -1,6 +1,7 @@
-from flask import Blueprint, request
+from flask import Blueprint, request, jsonify
 import os
 import base64
+from firebase_admin import storage
 from config import Config
 
 bp = Blueprint('upload', __name__)
@@ -15,12 +16,19 @@ def upload_file():
         return "Both 'image' and 'image_id' must be provided", 400
 
     try:
-        # Decode the base64 string and save the image
+        # Decode the base64 string
         image_data = base64.b64decode(image_base64)
-        image_path = os.path.join(Config.RECEIVED_IMAGES_PATH, f'{image_id}.jpg')
-        with open(image_path, 'wb') as file:
-            file.write(image_data)
-    except Exception as e:
-        return f"Error saving image: {e}", 500
+        image_path = f'{image_id}.jpg'
+        
+        # Upload the image to Firebase Storage
+        bucket = storage.bucket()
+        blob = bucket.blob(f"upload_file/{image_path}")
+        blob.upload_from_string(image_data, content_type='image/jpg')
 
-    return "Image uploaded successfully", 200
+        # Get the public URL
+        blob.make_public()
+        image_url = blob.public_url
+
+        return jsonify({"message": "Image uploaded successfully", "image_url": image_url}), 200
+    except Exception as e:
+        return f"Error uploading image to Firebase: {e}", 500

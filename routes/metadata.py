@@ -46,8 +46,8 @@ def get_metadata():
         for item in document['metadata_array']:
             # Extract face_id and image from each item
             metadata_entry = {
-                'face_id': item['face_id'],
-                'image': item['image']  # Include image data
+                'up_image_id': item['up_image_id'],
+                'up_image': item['up_image']  # Include image data
             }
 
             # Append the processed entry to the metadata_list
@@ -63,3 +63,31 @@ def get_metadata():
     except Exception as e:
         # Handle and log any exceptions that occur
         return jsonify({"error": str(e)}), 500
+    
+@bp.route('/get_metadata_array', methods=['GET'])
+def get_metadata_array():
+    image_id = request.args.get('image_id')
+    mongo_client = current_app.config['mongo_client']
+    collection = mongo_client.vas['users']
+    res_object = {}
+    try:
+        document = collection.find_one({'metadata_array.up_image_id': image_id}, {'_id': 0, 'metadata_array': 1})
+        if not document or 'metadata_array' not in document:
+            return jsonify({"error": "No metadata found for the given image_id"}), 404
+        
+        # Extract metadata_array and filter it
+        metadata_array = document['metadata_array']
+        filtered_metadata = [item for item in metadata_array if item['up_image_id'] == image_id]
+        
+        metadata_list = []
+        for items in filtered_metadata:
+            metadata_entry = {
+                'detection_results': items['detected']
+            }
+            metadata_list.append(metadata_entry)
+        
+        res_object['metadata'] = metadata_list
+        return jsonify(res_object), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
