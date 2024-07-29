@@ -15,4 +15,4 @@ COPY . .
 EXPOSE 50505
 RUN cd $APP_PATH
 
-CMD ["gunicorn", "-c", "gunicorn_config.py", "app:app"]
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "app:app"]
