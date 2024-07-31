@@ -10,31 +10,26 @@ from services.embeddings import extract_embeddings, compare_embeddings
 from services.video_processor import VideoProcessor
 
 
-def create_app():
-    app = Flask(__name__)
-    CORS(app, origins="http://localhost:3000")
+app = Flask(__name__)
+CORS(app, origins="https://vas-frontend.vercel.app")
 
     # Initialize MongoDB client once at startup
-    with app.app_context():
-        mongo_client = MongoClient(Config.MONGO_URI)
-        app.config['mongo_client'] = mongo_client
-        app.config['generate_unique_id'] = generate_unique_id
-        app.config['extract_embeddings'] = extract_embeddings
-        app.config['compare_embeddings'] = compare_embeddings
-        app.config['VideoProcessor'] = VideoProcessor
+mongo_client = MongoClient(Config.MONGO_URI)
+app.config['mongo_client'] = mongo_client
+app.config['generate_unique_id'] = generate_unique_id
+app.config['extract_embeddings'] = extract_embeddings
+app.config['compare_embeddings'] = compare_embeddings
+app.config['VideoProcessor'] = VideoProcessor
         # app.config['insertion_bool'] = False
 
         # Initialize Firebase
-        initialize_firebase()
+initialize_firebase()
 
         # Register blueprints
-        app.register_blueprint(default.bp)
-        app.register_blueprint(upload.bp)
-        app.register_blueprint(stream.bp)
-        app.register_blueprint(metadata.bp)
-
-    return app
+app.register_blueprint(default.bp)
+app.register_blueprint(upload.bp)
+app.register_blueprint(stream.bp)
+app.register_blueprint(metadata.bp)
 
 if __name__ == '__main__':
-    app = create_app()
     app.run(host="0.0.0.0", port=5000, debug=True, threaded=True)

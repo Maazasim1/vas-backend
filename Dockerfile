@@ -6,13 +6,14 @@ WORKDIR /code
 
 COPY requirements.txt .
 
-RUN apt-get update && \
-    apt-get install -y libgl1-mesa-dev && \
-    pip install --no-cache-dir -r requirements.txt
+RUN apt-get update
+
+RUN apt-get install -y libgl1-mesa-dev
+
+RUN pip3 install -r requirements.txt
 
 COPY . .
 
 EXPOSE 50505
-RUN cd $APP_PATH
 
-CMD ["gunicorn", "-c", "gunicorn.conf.py", "app:app"]
+ENTRYPOINT ["gunicorn", "app:app"]
