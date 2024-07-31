@@ -1,11 +1,12 @@
-# video_processor.py
 import cv2
 import os
 import base64
 import numpy as np
 import json
 import uuid
+import io
 from PIL import Image
+import requests
 import torch
 from ultralytics import YOLO
 from facenet_pytorch import InceptionResnetV1, MTCNN
@@ -32,9 +33,11 @@ class VideoProcessor:
         yield 'data: Streaming API initialized\n\n'
 
         frame_count = 0
-        # Loading received image
+        # Loading received image from URL
         try:
-            image_ref = Image.open(image_path)
+            response = requests.get(image_path)
+            response.raise_for_status()  # Raise an error for bad responses
+            image_ref = Image.open(io.BytesIO(response.content))
             image_ref = image_ref.convert("RGBA")
             image_ref = np.array(image_ref)
             # Convert RGBA to BGR
@@ -132,4 +135,3 @@ class VideoProcessor:
 
         self.cap.release()
         yield 'data: Video processing completed\n\n'
-
