@@ -4,6 +4,8 @@ import os
 import base64
 from PIL import Image
 import numpy as np
+import io
+from firebase_admin import storage
 
 bp = Blueprint('stream', __name__)
 
@@ -16,22 +18,21 @@ def stream():
         if not image_id:
             return "No image ID provided", 400
 
-        image_path = os.path.join('ReceivedImages', f'{image_id}.jpg')
-        if not os.path.exists(image_path):
+        # Check if the file exists in Firebase Storage
+        bucket = storage.bucket()
+        print(image_id)
+        blob = bucket.blob(f'upload_file/{image_id}.jpg')
+        if not blob.exists():
             return "Image not found", 404
-        insertion_bool=False
+
+        image_url = blob.public_url
+
+        insertion_bool = False
         db = mongo_client.vas
         collection = db['users']
         result = collection.find_one({'email': email_id})
         if not result:
-            return f"No user with this email found", 404
-
-        try:
-            # Load the reference image
-            image = Image.open(image_path)
-            image = np.array(image)
-        except Exception as e:
-            return f"Error processing image: {e}", 500
+            return "No user with this email found", 404
 
         # Access the utility functions and classes from the app context
         generate_unique_id = current_app.config['generate_unique_id']
@@ -39,7 +40,8 @@ def stream():
         compare_embeddings = current_app.config['compare_embeddings']
         VideoProcessor = current_app.config['VideoProcessor']
 
-        reference_embedding = extract_embeddings(image)
+        # Use the image URL instead of the local path
+        reference_embedding = extract_embeddings(image_url)
         if reference_embedding is None:
             return "No face detected in the reference image", 400
 
@@ -55,11 +57,11 @@ def stream():
                         reference_embedding=reference_embedding,
                         email_id=email_id,
                         image_id=image_id,
-                        image_path=image_path,
+                        image_path=image_url,  # Pass the URL here
                         insertion_bool=insertion_bool
                     )
                     if res:
-                        yield f"data: Duplicate key detected\n\n"
+                        yield "data: Duplicate key detected\n\n"
                         break
 
         return Response(generate(), mimetype='text/event-stream')

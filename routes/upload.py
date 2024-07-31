@@ -24,9 +24,9 @@ def upload_file():
         image_data = base64.b64decode(image_base64)
         image_path = os.path.join(received_images_path, f'{image_id}.jpg')
 
-        # Save the image locally
-        with open(image_path, 'wb') as image_file:
-            image_file.write(image_data)
+        # # Save the image locally
+        # with open(image_path, 'wb') as image_file:
+        #     image_file.write(image_data)
 
         # Upload the image to Firebase Storage
         bucket = storage.bucket()
