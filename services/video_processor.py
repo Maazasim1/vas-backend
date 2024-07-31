@@ -35,7 +35,10 @@ class VideoProcessor:
         # Loading received image
         try:
             image_ref = Image.open(image_path)
+            image_ref = image_ref.convert("RGBA")
             image_ref = np.array(image_ref)
+            # Convert RGBA to BGR
+            image_ref = cv2.cvtColor(image_ref, cv2.COLOR_RGBA2BGR)
             _, image_ref_b64 = cv2.imencode('.jpg', image_ref)
             image_ref_b64 = base64.b64encode(image_ref_b64).decode('utf-8')
         except Exception as e:
@@ -63,6 +66,7 @@ class VideoProcessor:
 
         while True:
             success, frame = self.cap.read()
+            frame_count += 1
             if not success:
                 break
 
@@ -88,12 +92,14 @@ class VideoProcessor:
                         else:
                             # Draw a red bounding box around the detected face
                             cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
+                            continue
 
                         unique_face_id = str(uuid.uuid4())
-                        timestamp = frame_count / self.cap.get(cv2.CAP_PROP_FPS)
 
-                        # Convert the frame to a base64 string
-                        _, buffer = cv2.imencode('.jpg', frame)
+                        # Convert the frame to RGB before encoding
+                        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        _, buffer = cv2.imencode('.jpg', frame_rgb)
+                        
                         frame_base64 = base64.b64encode(buffer).decode('utf-8')
                         try:
                             frame_base64_bytes = base64.b64decode(frame_base64)
@@ -106,6 +112,7 @@ class VideoProcessor:
                             return
 
                         detected = {
+                            'frame_count': frame_count,
                             'detected': match,
                             'face_id': unique_face_id,
                             'timestamp': str(cur_date_time),
@@ -125,3 +132,4 @@ class VideoProcessor:
 
         self.cap.release()
         yield 'data: Video processing completed\n\n'
+
