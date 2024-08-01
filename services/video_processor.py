@@ -13,7 +13,7 @@ from facenet_pytorch import InceptionResnetV1, MTCNN
 from services.embeddings import extract_embeddings, compare_embeddings
 from mongo_client import insert_metadata
 from config import Config
-from utils import face_detection
+from services.utils import face_detection
 from firebase_admin import storage
 from datetime import datetime
 from flask import current_app
