@@ -5,7 +5,7 @@ import numpy as np
 import json
 import uuid
 import io
-from PIL import Image
+from PIL import Image, ExifTags
 import requests
 import torch
 from ultralytics import YOLO
@@ -39,6 +39,24 @@ class VideoProcessor:
             response = requests.get(image_path)
             response.raise_for_status()  # Raise an error for bad responses
             image_ref = Image.open(io.BytesIO(response.content))
+            
+            # Check and correct image orientation using EXIF metadata
+            try:
+                for orientation in ExifTags.TAGS.keys():
+                    if ExifTags.TAGS[orientation] == 'Orientation':
+                        break
+
+                exif = dict(image_ref._getexif().items())
+                if exif[orientation] == 3:
+                    image_ref = image_ref.rotate(180, expand=True)
+                elif exif[orientation] == 6:
+                    image_ref = image_ref.rotate(270, expand=True)
+                elif exif[orientation] == 8:
+                    image_ref = image_ref.rotate(90, expand=True)
+            except (AttributeError, KeyError, IndexError):
+                # print("Attribute Error: "+AttributeError+"Key Error: "+KeyError)
+                pass
+
             image_ref = image_ref.convert("RGBA")
             image_ref = np.array(image_ref)
             # Convert RGBA to BGR
@@ -46,7 +64,7 @@ class VideoProcessor:
             _, image_ref_b64 = cv2.imencode('.jpg', image_ref)
             image_ref_b64 = base64.b64encode(image_ref_b64).decode('utf-8')
         except Exception as e:
-            yield f"data: Error loading received image: {str(e)}\n\n"
+            yield f"data: Error loading received image: e\n\n"
             return
 
         image_path = f'{image_id}.jpg'
@@ -78,10 +96,10 @@ class VideoProcessor:
 
             # Detect faces
             results = self.model(frame)
-            face_bboxes = face_detection(results)                   #CHANGED
+            face_bboxes = face_detection(results)
             for box in face_bboxes:
                 cur_date_time = datetime.now()
-                x1, y1, x2, y2 = box[0], box[1], box[2], box[3]     #CHANGED
+                x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
                 face = frame[int(y1):int(y2), int(x1):int(x2)]
 
                 # Extract features from the detected face
@@ -99,12 +117,12 @@ class VideoProcessor:
 
                     unique_face_id = str(uuid.uuid4())
 
-                    # Convert the frame to RGB before encoding
-                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    _, buffer = cv2.imencode('.jpg', frame_rgb)
-                    
-                    frame_base64 = base64.b64encode(buffer).decode('utf-8')
                     try:
+                        # Convert the frame to RGB before encoding
+                        # frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        _, buffer = cv2.imencode('.jpg', frame)
+
+                        frame_base64 = base64.b64encode(buffer).decode('utf-8')
                         frame_base64_bytes = base64.b64decode(frame_base64)
                         blob_res = bucket.blob(f"stream/results/{unique_face_id}.jpg")
                         blob_res.upload_from_string(frame_base64_bytes, content_type='image/jpg')
@@ -120,7 +138,7 @@ class VideoProcessor:
                         'face_id': unique_face_id,
                         'timestamp': str(cur_date_time),
                         'video_id': self.video_id,
-                        'image': res_image_url,  # Add the base64 string to metadata
+                        'image': res_image_url,
                     }
                     metadata['detected'].append(detected)
                     yield f'data: {json.dumps(detected)}\n\n'  # Yield metadata for the face
