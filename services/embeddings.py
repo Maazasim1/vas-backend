@@ -31,6 +31,15 @@ def extract_embeddings(image_input):
     else:
         return None
 
+def extract_embeddings_from_video(frame):
+    faces = mtcnn(frame)
+    if faces is not None:
+        faces = faces.unsqueeze(0)
+        embeddings = resnet(faces).detach()
+        return embeddings
+    else:
+        return None
+
 def compare_embeddings(embedding1, embedding2, threshold=1.0):
     distance = torch.norm(embedding1 - embedding2).item()
     return distance < threshold

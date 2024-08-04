@@ -16,7 +16,7 @@ from config import Config
 from services.utils import face_detection
 from firebase_admin import storage
 from datetime import datetime
-from flask import current_app
+from flask import current_app, json
 
 class VideoProcessor:
     def __init__(self, video_path, mongo_client):
@@ -30,7 +30,7 @@ class VideoProcessor:
         self.mtcnn = MTCNN()
         self.resnet = InceptionResnetV1(pretrained='casia-webface').eval()
 
-    def process_video(self, reference_embedding, email_id, image_id, image_path, insertion_bool):
+    def process_video(self, reference_embedding, email_id, image_id, image_path, insertion_bool, video_count):
         yield 'data: Streaming API initialized\n\n'
 
         frame_count = 0
@@ -152,4 +152,87 @@ class VideoProcessor:
             return insertion_bool
 
         self.cap.release()
-        yield 'data: Video processing completed\n\n'
+        video_id_data = {'video_count':video_count}
+        yield f'data: {json.dumps(video_id_data)}\n\n'
+
+
+    def process_frame_on_video(self, reference_embedding, email_id, image_id, image_path, video_path, insertion_bool, video_count):
+        yield 'data: Streaming API initialized\n\n'
+
+        frame_count = 0
+        metadata = {
+            'up_image_id': image_id,
+            'up_image': video_path,
+            'detected': []
+        }
+        bucket = storage.bucket()
+        while True:
+            success, frame = self.cap.read()
+            frame_count += 1
+            if not success:
+                break
+
+            matched_any_face = False  # Flag to check if any face matches
+
+            # Detect faces
+            results = self.model(frame)
+            face_bboxes = face_detection(results)
+            for box in face_bboxes:
+                cur_date_time = datetime.now()
+                x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
+                face = frame[int(y1):int(y2), int(x1):int(x2)]
+
+                # Extract features from the detected face
+                face_embedding = extract_embeddings(face)
+                if face_embedding is not None:
+                    match = compare_embeddings(reference_embedding, face_embedding)
+                    matched_any_face = matched_any_face or match  # Update flag if any face matches
+                    if match:
+                        # Draw a green bounding box around the detected face
+                        cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+                    else:
+                        # Draw a red bounding box around the detected face
+                        cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
+                        continue
+
+                    unique_face_id = str(uuid.uuid4())
+
+                    try:
+                        # Convert the frame to RGB before encoding
+                        # frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        _, buffer = cv2.imencode('.jpg', frame)
+
+                        frame_base64 = base64.b64encode(buffer).decode('utf-8')
+                        frame_base64_bytes = base64.b64decode(frame_base64)
+                        blob_res = bucket.blob(f"stream/results/{unique_face_id}.jpg")
+                        blob_res.upload_from_string(frame_base64_bytes, content_type='image/jpg')
+                        blob_res.make_public()
+                        res_image_url = blob_res.public_url
+                    except Exception as e:
+                        yield f"data: Error while uploading to stream/results: {str(e)}\n\n"
+                        return
+
+                    detected = {
+                        'frame_count': frame_count,
+                        'detected': match,
+                        'face_id': unique_face_id,
+                        'timestamp': str(cur_date_time),
+                        'video_id': self.video_id,
+                        'image': res_image_url,
+                    }
+                    metadata['detected'].append(detected)
+                    yield f'data: {json.dumps(detected)}\n\n'  # Yield metadata for the face
+                else:
+                    continue
+
+        inserted_document = insert_metadata(metadata, email_id, self.mongo_client)
+        if inserted_document and inserted_document.modified_count > 0:
+            metadata['_id'] = str(inserted_document.upserted_id) if inserted_document.upserted_id else "existing_document"
+        else:
+            yield "data: Failed to insert metadata\n\n"
+            insertion_bool = True
+            return insertion_bool
+
+        self.cap.release()
+        video_id_data = {'video_count':video_count}
+        yield f'data: {json.dumps(video_id_data)}\n\n'

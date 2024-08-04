@@ -6,7 +6,7 @@ from config import Config
 from routes import default, upload, stream, metadata
 from firebase.firebase_config import initialize_firebase
 from services.utils import generate_unique_id
-from services.embeddings import extract_embeddings, compare_embeddings
+from services.embeddings import extract_embeddings, compare_embeddings, extract_embeddings_from_video
 from services.video_processor import VideoProcessor
 
 
@@ -20,6 +20,7 @@ app.config['generate_unique_id'] = generate_unique_id
 app.config['extract_embeddings'] = extract_embeddings
 app.config['compare_embeddings'] = compare_embeddings
 app.config['VideoProcessor'] = VideoProcessor
+app.config['extract_embeddings_from_video'] = extract_embeddings_from_video
         # app.config['insertion_bool'] = False
 
         # Initialize Firebase
