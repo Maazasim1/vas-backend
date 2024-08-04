@@ -11,7 +11,7 @@ from services.video_processor import VideoProcessor
 
 
 app = Flask(__name__)
-CORS(app, origins="https://vas-frontend.vercel.app")
+CORS(app, origins=["https://vas-frontend.vercel.app","http://localhost:3000"])
 
     # Initialize MongoDB client once at startup
 mongo_client = MongoClient(Config.MONGO_URI)
