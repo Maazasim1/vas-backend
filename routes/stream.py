@@ -1,7 +1,9 @@
 # routes/stream.py
 from flask import Blueprint, Response, request, current_app, json
+from tqdm import tqdm
 import requests
 import os
+import time
 import base64
 from PIL import Image
 import numpy as np
@@ -11,6 +13,7 @@ import cv2
 from config import Config
 from ultralytics import YOLO
 from services.utils import face_detection
+from services.embeddings import extract_embeddings, compare_embeddings
 bp = Blueprint('stream', __name__)
 
 @bp.route('/stream/image', methods=['GET'])
@@ -122,32 +125,52 @@ def stream_video():
         else:
             return "Failed to download video", 500
 
-        cap = cv2.VideoCapture(video_path)
-        model = YOLO(Config.FACE_DETECTION_MODEL_PATH)
+    cap = cv2.VideoCapture(video_path)
+    model = YOLO(Config.FACE_DETECTION_MODEL_PATH)
+    
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
+    distinct_faces = []
+    with tqdm(total=total_frames, desc="Processing Video") as pbar:
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if ret == True:
+                results = model.predict(frame, verbose = False)
+                face_bboxes = face_detection(results)
+                for face in face_bboxes:
+                    face_img = frame[int(face[1]):int(face[3]), int(face[0]):int(face[2])]
+                    emb = extract_embeddings(face_img)
+                    if emb is not None:
+                        is_unique = True
+                        for faces in distinct_faces:
+                            if compare_embeddings(emb, faces):
+                                is_unique = False
+                                break
+                
+                        if is_unique:
+                            distinct_faces.append(emb)
+                pbar.update(1)
+            else:
+                break
+    
+    print(f"Found {len(distinct_faces)} distinct faces")
+            
     def generate():
+        start_time = time.time()
         video_count = 0
         frame_count = 0
         nvr_total = len([entry for entry in os.listdir(video_directory) if entry.endswith(".mp4")])
 
-        while True:
-            success, frame = cap.read()
-            if not success:
-                break
-            reference_embedding = extract_embeddings_from_video(frame)
-            if reference_embedding is None:
-                return "No face detected in the reference image", 400
-            results = model(frame)
-            face_bboxes = face_detection(results)
+        for video_filename in os.listdir(video_directory):
+            if video_filename.endswith(".mp4"):
+                video_count += 1
+                video_path = os.path.join(video_directory, video_filename)
+                video_processor = VideoProcessor(video_path, mongo_client)
 
-            for video_filename in os.listdir(video_directory):
-                if video_filename.endswith(".mp4"):
-                    video_count += 1
-                    video_path = os.path.join(video_directory, video_filename)
-                    video_processor = VideoProcessor(video_path, mongo_client)
-
+                for i,faces in enumerate(distinct_faces):
+                    print(f"Face {i}")
                     res = yield from video_processor.process_frame_on_video(
-                        reference_embedding=reference_embedding,
+                        reference_embedding=faces,
                         email_id=email_id,
                         image_id=video_id,
                         image_path=frame,
@@ -159,9 +182,17 @@ def stream_video():
                     if res:
                         yield "data: Duplicate key detected\n\n"
                         break
+        end_time = time.time()
+        
+        execution_time_seconds = end_time - start_time
 
-            frame_response = {'completed': f"Processing of frame: {frame_count} completed across NVR"}
-            yield f'data: {json.dumps(frame_response)}\n\n'
+        minutes = int(execution_time_seconds // 60)
+        seconds = int(execution_time_seconds % 60)
+
+        print(f"Execution time: {minutes} minutes and {seconds} seconds")
+
+        frame_response = {'completed': f"Processing of frame: {frame_count} completed across NVR"}
+        yield f'data: {json.dumps(frame_response)}\n\n'
 
         cap.release()
         final_response = {'Video Completion': "Video processed!"}
