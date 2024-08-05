@@ -40,6 +40,6 @@ def extract_embeddings_from_video(frame):
     else:
         return None
 
-def compare_embeddings(embedding1, embedding2, threshold=1.0):
+def compare_embeddings(embedding1, embedding2, threshold=0.5):
     distance = torch.norm(embedding1 - embedding2).item()
     return distance < threshold
