@@ -14,6 +14,7 @@ from config import Config
 from ultralytics import YOLO
 from services.utils import face_detection
 from services.embeddings import extract_embeddings, compare_embeddings
+from mongo_client import insert_metadata
 bp = Blueprint('stream', __name__)
 
 @bp.route('/stream/image', methods=['GET'])
@@ -159,8 +160,13 @@ def stream_video():
         start_time = time.time()
         video_count = 0
         frame_count = 0
+        insertion_bool=False
         nvr_total = len([entry for entry in os.listdir(video_directory) if entry.endswith(".mp4")])
-
+        metadata_insertion = {
+            'up_image_id': video_id,
+            'up_image': video_url,
+            'detected': []
+        }
         for video_filename in os.listdir(video_directory):
             if video_filename.endswith(".mp4"):
                 video_count += 1
@@ -169,19 +175,25 @@ def stream_video():
 
                 for i,faces in enumerate(distinct_faces):
                     print(f"Face {i}")
-                    res = yield from video_processor.process_frame_on_video(
+                    metadata = yield from video_processor.process_frame_on_video(
                         reference_embedding=faces,
                         email_id=email_id,
                         image_id=video_id,
                         image_path=frame,
                         video_path = video_url,  # Pass the URL here
-                        insertion_bool=insertion_bool,
                         video_count=video_count
                     )
                     frame_count += 1
-                    if res:
-                        yield "data: Duplicate key detected\n\n"
-                        break
+                    if 'detected' in metadata:
+                        metadata_insertion['detected'].extend(metadata['detected'])
+        inserted_document = insert_metadata(metadata_insertion, email_id, mongo_client)
+        if inserted_document and inserted_document.modified_count > 0:
+            metadata['_id'] = str(inserted_document.upserted_id) if inserted_document.upserted_id else "existing_document"
+        else:
+            yield "data: Failed to insert metadata\n\n"
+            insertion_bool = True                   
+        if insertion_bool:
+            yield "data: Duplicate key detected\n\n"
         end_time = time.time()
         
         execution_time_seconds = end_time - start_time
