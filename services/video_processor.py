@@ -56,7 +56,7 @@ class VideoProcessor:
                 elif exif[orientation] == 8:
                     image_ref = image_ref.rotate(90, expand=True)
             except (AttributeError, KeyError, IndexError):
-                # print("Attribute Error: "+AttributeError+"Key Error: "+KeyError)
+                # yield f'data: {AttributeError}, {KeyError}'
                 pass
 
             image_ref = image_ref.convert("RGBA")
