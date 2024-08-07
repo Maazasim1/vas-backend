@@ -53,15 +53,15 @@ def stream_image():
         if reference_embedding is None:
             return "No face detected in the reference image", 400
 
-        video_directory = './videos/'
         def generate():
             video_count = 0
-            nvr_total = len([entry for entry in os.listdir(video_directory) if entry.endswith(".mp4")])
-            for video_filename in os.listdir(video_directory):
-                if video_filename.endswith(".mp4"):
-                    video_count+=1
-                    video_path = os.path.join(video_directory, video_filename)
-                    video_processor = VideoProcessor(video_path, mongo_client)
+            blobs = bucket.list_blobs(prefix='NVR/')
+            nvr_total = len([blob for blob in blobs if blob.name.endswith('.mp4')])
+            for blob in blobs:
+                if blob.name.endswith('.mp4'):
+                    video_count += 1
+                    video_url = blob.public_url
+                    video_processor = VideoProcessor(video_url, mongo_client)
 
                     res = yield from video_processor.process_video(
                         reference_embedding=reference_embedding,
@@ -74,10 +74,11 @@ def stream_image():
                     if res:
                         yield "data: Duplicate key detected\n\n"
                         break
-            final_response = {'completed':"Processing on NVR completed!"}
+            final_response = {'completed': "Processing on NVR completed!"}
             yield f'data: {json.dumps(final_response)}\n\n'
 
         return Response(generate(), mimetype='text/event-stream')
+
     
 @bp.route('/stream/video', methods=["GET"])
 def stream_video():
@@ -155,7 +156,21 @@ def stream_video():
                 break
     
     print(f"Found {len(distinct_faces)} distinct faces")
-            
+    print(f"Fetching videos from NVR")
+    buc = storage.bucket()
+    blobs = buc.list_blobs(prefix="NVR/")
+    for file in blobs:
+        if not file.name.endswith(".mp4"):
+            print(f"Skipping {file.name}, as it does not appear to be a video file.")
+            continue
+
+        local_file_path = os.path.join(video_directory, os.path.basename(file.name))
+        try:
+            file.download_to_filename(local_file_path)
+            print(f'Downloaded {file.name} to {local_file_path}')
+        except Exception as e:
+            print(f'Failed to download {file.name}: {e}')
+    print("Download successful")
     def generate():
         start_time = time.time()
         video_count = 0

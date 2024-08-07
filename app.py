@@ -3,7 +3,7 @@ from flask import Flask
 from flask_cors import CORS
 from pymongo import MongoClient
 from config import Config
-from routes import default, upload, stream, metadata
+from routes import default, upload, stream, metadata,nvr
 from firebase.firebase_config import initialize_firebase
 from services.utils import generate_unique_id
 from services.embeddings import extract_embeddings, compare_embeddings, extract_embeddings_from_video
@@ -31,6 +31,7 @@ app.register_blueprint(default.bp)
 app.register_blueprint(upload.bp)
 app.register_blueprint(stream.bp)
 app.register_blueprint(metadata.bp)
+app.register_blueprint(nvr.bp)
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000, debug=True, threaded=True)
