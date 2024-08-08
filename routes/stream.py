@@ -28,7 +28,6 @@ def stream_image():
 
         # Check if the file exists in Firebase Storage
         bucket = storage.bucket()
-        print(image_id)
         blob = bucket.blob(f'upload_file/images/{image_id}.jpg')
         if not blob.exists():
             return "Image not found", 404
@@ -55,12 +54,13 @@ def stream_image():
 
         def generate():
             video_count = 0
-            blobs = bucket.list_blobs(prefix='NVR/')
+            blobs = list(bucket.list_blobs(prefix='NVR/'))  # Convert to list
             nvr_total = len([blob for blob in blobs if blob.name.endswith('.mp4')])
-            for blob in blobs:
-                if blob.name.endswith('.mp4'):
+            for file in blobs:
+                if file.name.endswith('.mp4'):
                     video_count += 1
-                    video_url = blob.public_url
+                    video_url = file.public_url
+                    
                     video_processor = VideoProcessor(video_url, mongo_client)
 
                     res = yield from video_processor.process_video(
@@ -78,6 +78,7 @@ def stream_image():
             yield f'data: {json.dumps(final_response)}\n\n'
 
         return Response(generate(), mimetype='text/event-stream')
+
 
     
 @bp.route('/stream/video', methods=["GET"])
