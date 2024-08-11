@@ -51,6 +51,12 @@ def stream_image():
         reference_embedding = extract_embeddings(image_url)
         if reference_embedding is None:
             return "No face detected in the reference image", 400
+        
+        metadata = {
+            'up_image_id': image_id,
+            'up_image': image_url,
+            'detected': []
+        }
 
         def generate():
             video_count = 0
@@ -58,12 +64,13 @@ def stream_image():
             nvr_total = len([blob for blob in blobs if blob.name.endswith('.mp4')])
             for file in blobs:
                 if file.name.endswith('.mp4'):
+                    yield f'data: {json.dumps({'File':file.name})}\n\n'
                     video_count += 1
                     video_url = file.public_url
                     
                     video_processor = VideoProcessor(video_url, mongo_client)
 
-                    res = yield from video_processor.process_video(
+                    metadata_user = yield from video_processor.process_video(
                         reference_embedding=reference_embedding,
                         email_id=email_id,
                         image_id=image_id,
@@ -71,9 +78,16 @@ def stream_image():
                         insertion_bool=insertion_bool,
                         video_count=video_count
                     )
-                    if res:
-                        yield "data: Duplicate key detected\n\n"
-                        break
+                    metadata['detected'].extend(metadata_user['detected'])
+                else:
+                    yield f'data: {json.dumps({'nvrError': 'could not find a file with .mp4 connection'})}\n\n'
+
+            inserted_document = insert_metadata(metadata, email_id, mongo_client)
+            if inserted_document and inserted_document.modified_count > 0:
+                metadata['_id'] = str(inserted_document.upserted_id) if inserted_document.upserted_id else "existing_document"
+            else:
+                yield "data: Failed to insert metadata\n\n"
+                
             final_response = {'completed': "Processing on NVR completed!"}
             yield f'data: {json.dumps(final_response)}\n\n'
 

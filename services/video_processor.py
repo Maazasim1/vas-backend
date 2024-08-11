@@ -147,17 +147,12 @@ class VideoProcessor:
                         metadata['detected'].append(detected)
                         yield f'data: {json.dumps(detected)}\n\n'  # Yield metadata for the face
                 
-        inserted_document = insert_metadata(metadata, email_id, self.mongo_client)
-        if inserted_document and inserted_document.modified_count > 0:
-            metadata['_id'] = str(inserted_document.upserted_id) if inserted_document.upserted_id else "existing_document"
-        else:
-            yield "data: Failed to insert metadata\n\n"
-            insertion_bool = True
-            return insertion_bool
+        
 
         self.cap.release()
         video_id_data = {'video_count':video_count}
         yield f'data: {json.dumps(video_id_data)}\n\n'
+        return metadata
 
 
     def process_frame_on_video(self, reference_embedding, email_id, image_id, image_path, video_path, video_count):
@@ -236,8 +231,7 @@ class VideoProcessor:
         #     yield "data: Failed to insert metadata\n\n"
         #     insertion_bool = True
         #     return insertion_bool
-        return metadata
-
         self.cap.release()
         video_id_data = {'video_count':video_count}
         yield f'data: {json.dumps(video_id_data)}\n\n'
+        return metadata
