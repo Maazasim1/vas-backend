@@ -2,11 +2,17 @@ import torch
 import numpy as np
 from PIL import Image
 from facenet_pytorch import MTCNN, InceptionResnetV1
+from torchvision import transforms
 import requests
 import io
 
 mtcnn = MTCNN()
 resnet = InceptionResnetV1(pretrained='casia-webface').eval()
+preprocess = transforms.Compose([
+    transforms.Resize((160,160)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.5,0.5,0.5], std=[0.5,0.5,0.5]),
+])
 
 def extract_embeddings(image_input):
     # Check if input is a URL
@@ -22,14 +28,13 @@ def extract_embeddings(image_input):
 
     img = img.convert('RGB')
     
-    # Detect faces
-    faces = mtcnn(img)
-    if faces is not None:
-        faces = faces.unsqueeze(0)
-        embeddings = resnet(faces).detach()
-        return embeddings
-    else:
-        return None
+    face_tensor = preprocess(img)
+    face_tensor = face_tensor.unsqueeze(0)
+    
+    with torch.no_grad():
+        embeddings = resnet(face_tensor)
+    
+    return embeddings
 
 def extract_embeddings_from_video(frame):
     faces = mtcnn(frame)
